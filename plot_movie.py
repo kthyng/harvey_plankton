@@ -21,7 +21,9 @@ tz = 'UTC'
 dstart = '2017-9-20'
 dend = '2017-10-2'
 
-os.makedirs('figures', exist_ok=True)
+figname = 'tail'
+
+os.makedirs('figures/%s' % figname, exist_ok=True)
 
 # controlling min/max by hand because FGB data skews it and isn't in view
 smin = 22  # min((df1[key].min(), df3[key].min()))
@@ -96,9 +98,15 @@ if not os.path.exists(fname):
     adcp3 = xr.open_dataset(loc)
 
     adcp = xr.concat([adcp1,adcp3],dim='time')
+
+    # u1 = adcp1.u.isel(depth_cell=0).rolling(time=20, center=True).mean().data
+    # v1 = adcp1.v.isel(depth_cell=0).rolling(time=20, center=True).mean().data
+
     adcp.to_netcdf(fname)
 else:
     adcp = xr.open_dataset(fname)
+adcp['u'].isel(depth_cell=0).data = adcp.u.isel(depth_cell=0).rolling(time=20, center=True).mean().data
+adcp['v'].isel(depth_cell=0).data = adcp.v.isel(depth_cell=0).rolling(time=20, center=True).mean().data
 
 # Sampling locations (and times)
 loc = 'data/leg1_latlon.csv'
@@ -122,13 +130,12 @@ date = start
 while date < end:
 
     date = start + counter*dt
-    fname = 'figures/%s' % date.strftime('%Y-%m-%dT%H%M') + '.png'
+    fname = 'figures/%s/%s.png' % (figname,date.strftime('%Y-%m-%dT%H%M'))
     if os.path.exists(fname):
         counter += 1
         continue
 
     fig = plt.figure(figsize=(9, 6))
-    # fig.subplots_adjust(wspace=0.05)
     ax = fig.add_axes([0.06, 0.01, 0.93, 0.95], projection=merc)
     ax.set_extent([-97.8, -93.4, 27, 29.8], pc)
     gl = ax.gridlines(linewidth=0.2, color='gray', alpha=0.5, linestyle='-', draw_labels=True)
@@ -150,7 +157,6 @@ while date < end:
     lons = np.asarray([blocs.loc[name,'lon'] for name in buoynames])
     lats = np.asarray([blocs.loc[name,'lat'] for name in buoynames])
     for lon, lat, col in zip(lons, lats, buoynames):
-        # ax.plot(lon, lat, 'k.', transform=pc, zorder=0, color='0.5')
         ax.text(lon + 0.02, lat, col, transform=pc, fontsize=10, color='0.5')
 
     # buoy salinity
@@ -209,7 +215,13 @@ while date < end:
 
 
     # SCS salt
-    ftt = ft.reindex([date], method='nearest')
+
+    if figname == 'tail':  # keep showing scs for a time period
+        dates = pd.date_range(start=date-pd.Timedelta('1 day'), end=date, freq=dt)
+        ftt = ft.reindex(dates, method='nearest')
+    else:
+        ftt = ft.reindex([date], method='nearest')
+
 
     ax.scatter(ftt['lon'], ftt['lat'], c=ftt['Practical salinity'], s=s,
                marker='s', cmap=cmo.haline, zorder=1,
@@ -217,6 +229,12 @@ while date < end:
 
 
     # ADCP
+    # if figname == 'tail':
+    #     lat = adcp['lat'].sel(time=slice(date-pd.Timedelta('3 hours'),date)).data
+    #     lon = adcp['lon'].sel(time=slice(date-pd.Timedelta('3 hours'),date)).data
+    #     u = adcp['u'].sel(time=slice(date-pd.Timedelta('3 hours'),date)).isel(depth_cell=0).data*100  # cm/s
+    #     v = adcp['v'].sel(time=slice(date-pd.Timedelta('3 hours'),date)).isel(depth_cell=0).data*100  # cm/s
+    # else:
     lat = adcp['lat'].sel(time=date, method='nearest').data.reshape(1)
     lon = adcp['lon'].sel(time=date, method='nearest').data.reshape(1)
     u = adcp['u'].sel(time=date, method='nearest').isel(depth_cell=0).data.reshape(1)*100  # cm/s
