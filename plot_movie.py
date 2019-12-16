@@ -10,6 +10,8 @@ import os
 import cartopy
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import cmocean.cm as cmo
+import matplotlib.pyplot as plt
+import numpy as np
 
 land_10m = cartopy.feature.NaturalEarthFeature('physical', 'land', '10m',
                                         edgecolor='face',
@@ -21,13 +23,14 @@ tz = 'UTC'
 dstart = '2017-9-20'
 dend = '2017-10-2'
 
+key = 'Temperature'  # 'Salinity'  # or 'Temperature'
+
 figname = 'tail'
+
+figname += '_%s' % key
 
 os.makedirs('figures/%s' % figname, exist_ok=True)
 
-# controlling min/max by hand because FGB data skews it and isn't in view
-smin = 22  # min((df1[key].min(), df3[key].min()))
-smax = 34  # max((df1[key].max(), df3[key].max()))
 # currents arrows
 cwidth = 0.004  # 0.002
 cscale = 1500  # 2000
@@ -39,13 +42,33 @@ dd = 2
 # scatter
 s = 150
 
+# dt = pd.Timedelta('1 hour')
+dt = pd.Timedelta('15 min')
+
+
+if key == 'Salinity':
+    cmap = cmo.haline
+    # controlling min/max by hand because FGB data skews it and isn't in view
+    smin = 22  # min((df1[key].min(), df3[key].min()))
+    smax = 30  # max((df1[key].max(), df3[key].max()))
+    currentscolor = 'orange'
+elif key == 'Temperature':
+    cmap = cmo.thermal
+    smin = 28.2
+    smax = 29.4
+    currentscolor = 'limegreen'
+
 
 ## Read in data ##
 
 # Buoys
 fname = 'data/buoys.csv'
+# not 8774320, 'PTAT2'
+buoynames = ['D', 'W', 'B', 'F', 'V', '42019', '42035','8773146','8772985',
+             '8771972', '8773767', 'mg0101', '8773701', '8773259', '8773037',
+             '8775241', '8775237', '8775296', '8775244',
+             '8775792', '8775870']
 if not os.path.exists(fname):
-    buoynames = ['D', 'W', 'B', 'F', 'V', '42019', '42035']
     buoys = pd.DataFrame()
     for buoy in buoynames:
         # read in timezone and then localize to None
@@ -118,10 +141,8 @@ ll['lon'] = -(ll['DegLon'] + ll['MinLon']/60 + ll['SecLon']/3600)
 ## Make Images ##
 
 # time for plot
-start = pd.Timestamp('2017-9-23 00:00')  # in UTC
-# dt = pd.Timedelta('1 hour')
-dt = pd.Timedelta('15 min')
-# end = pd.Timestamp('2017-9-24 00:00')
+start = pd.Timestamp('2017-9-20 00:00')  # in UTC
+# end = pd.Timestamp('2017-9-23 00:00')
 end = pd.Timestamp('2017-10-1 16:00')
 
 counter = 0
@@ -160,17 +181,21 @@ while date < end:
         ax.text(lon + 0.02, lat, col, transform=pc, fontsize=10, color='0.5')
 
     # buoy salinity
-    cols = buoys.columns[['Salinity' in col for col in buoys.columns]]
+    if key == 'Temperature':
+        keyhere = 'WaterT [deg C]'
+    elif key == 'Salinity':
+        keyhere = 'Salinity'
+    cols = buoys.columns[[keyhere in col for col in buoys.columns]]
     colbuoys = [col.split(':')[0] for col in cols]
     lons = [blocs.loc[name,'lon'] for name in colbuoys]
     lats = [blocs.loc[name,'lat'] for name in colbuoys]
     values = buoys.reindex([date], method='nearest').loc[:,cols]
 
-    mappable = ax.scatter(lons, lats, c=values.values[0], s=s, cmap=cmo.haline,
+    mappable = ax.scatter(lons, lats, c=values.values[0], s=s, cmap=cmap,
                           transform=pc, vmin=smin, vmax=smax)
     cax = fig.add_axes([0.2, 0.85, 0.4, 0.02])
     cb = fig.colorbar(mappable, cax=cax, orientation='horizontal', pad=0.02, shrink=0.5, aspect=40, extend='both')
-    cb.set_label('Salinity', fontsize=14)
+    cb.set_label(key, fontsize=14)
 
     # buoy currents
     cols = buoys.columns[['East [cm/s]' in col for col in buoys.columns]]
@@ -181,9 +206,12 @@ while date < end:
     values = buoys.reindex([date], method='nearest').loc[:,cols]
     values2 = buoys.reindex([date], method='nearest').loc[:,cols2]
 
-    Q = ax.quiver(lons, lats, values.values[0], values2.values[0], transform=pc,
-                  width=cwidth, scale=cscale, headlength=2, headaxislength=2, zorder=10)
-    qk = ax.quiverkey(Q, 0.075, 0.75, 50, '0.5 m$\cdot$s$^{-1}$ current', labelpos='E', coordinates='axes')
+    if values.count().sum() > 0:  # need a non-nan value
+        Q = ax.quiver(lons, lats, values.values[0], values2.values[0], transform=pc,
+                      width=cwidth, scale=cscale, headlength=2, headaxislength=2,
+                      zorder=12, color=currentscolor)
+        qk = ax.quiverkey(Q, 0.075, 0.75, 50, '0.5 m$\cdot$s$^{-1}$ current',
+                          labelpos='E', coordinates='axes', color=currentscolor)
 
 
     # buoy wind
@@ -216,15 +244,19 @@ while date < end:
 
     # SCS salt
 
-    if figname == 'tail':  # keep showing scs for a time period
+    if 'tail' in figname:  # keep showing scs for a time period
         dates = pd.date_range(start=date-pd.Timedelta('1 day'), end=date, freq=dt)
         ftt = ft.reindex(dates, method='nearest')
     else:
         ftt = ft.reindex([date], method='nearest')
 
+    if key == 'Salinity':
+        keyhere = 'Practical salinity'
+    elif key == 'Temperature':
+        keyhere = 'Temperature'
 
-    ax.scatter(ftt['lon'], ftt['lat'], c=ftt['Practical salinity'], s=s,
-               marker='s', cmap=cmo.haline, zorder=1,
+    ax.scatter(ftt['lon'], ftt['lat'], c=ftt[keyhere], s=s,
+               marker='s', cmap=cmap, zorder=1,
                transform=pc, vmin=smin, vmax=smax)
 
 
