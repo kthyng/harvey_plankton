@@ -8,7 +8,7 @@ dependencies:
   - pip
   - scipy
   - cmocean
-  - cartopy
+  - cartopy=0.17.0
   - jupyterhub
   - netcdf4
   - pandas
@@ -16,7 +16,7 @@ dependencies:
   - jupyterlab
   - ipython
   - numpy
-  - matplotlib
+  - matplotlib=3.0.2
   - xarray
   - xlrd
   - pip:
