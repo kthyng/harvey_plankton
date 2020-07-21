@@ -1,0 +1,26 @@
+name: harvey-plankton
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7
+  - conda
+  - pip
+  - scipy
+  - cmocean
+  - cartopy
+  - jupyterhub
+  - netcdf4
+  - pandas
+  - jupyter
+  - jupyterlab
+  - ipython
+  - numpy
+  - matplotlib
+  - xarray
+  - xlrd
+  - pip:
+    - git+https://github.com/kthyng/tabs.git
+    - git+https://github.com/kthyng/scs.git
+    - windrose
+prefix: /Users/kthyng/opt/miniconda3
